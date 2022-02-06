@@ -32,7 +32,6 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
         const Document& doc0 = found_docs[0];
         ASSERT_EQUAL(doc0.id, doc_id);
     }
-
     {
         SearchServer server;
         server.SetStopWords("in the"s);
@@ -45,10 +44,9 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
 Разместите код остальных тестов здесь
 */
 void TestTfIdf() {
- 
     SearchServer server;
     const vector<int> doc_id = { 10, 11,12,13 };
-    vector < string> docus =
+    vector <string> docus =
     {
         "I like cats",
         "cats is nice animals",
@@ -63,20 +61,15 @@ void TestTfIdf() {
         {"Who", "it", "can", "be", "now"}
     };
     const vector<int> ratings = { 1, 2, 3 };
- 
- 
     for (int i = 0; i < docus.size(); i++) 
     {
       server.AddDocument(doc_id[i], docus[i], DocumentStatus::ACTUAL, ratings);
     }
     ASSERT_EQUAL(server.GetDocumentCount(), 4);
- 
-   
     vector<double> tf;
     int document_freq = 0;
     vector<double> ved;
     string term = "cats";
-   
     for (const auto& document : documents)
     {
         int word_count = count(begin(document), end(document), term);
@@ -86,19 +79,15 @@ void TestTfIdf() {
             document_freq += count(begin(document), end(document), term);
         }
     }
-    
     for (int i = 0; i < tf.size(); i++) {
         ved.push_back(tf[i] * log(static_cast<double>(documents.size()) / static_cast<double>(document_freq)));
     }
     vector <Document> nv = server.FindTopDocuments(term);
     sort(begin(ved), end(ved), [](double& d1, double& d2) {return d1 > d2; });
-    for (int i = 0; i < ved.size(); i++)
-    {
-        ASSERT_EQUAL(ved[i], nv[i].relevance);
+    for (int i = 0; i < ved.size(); i++) {
+        int eps = 1e-6;
+        ASSERT(abs(ved[i] - nv[i].relevance) <= eps);
     }
- 
-    
-   
 }
  
 void TestForUsingPredicate()
@@ -110,9 +99,7 @@ void TestForUsingPredicate()
     for (auto& n : rating) {
         sum_ratings += n;
     }
-    
     const int avg_rating = sum_ratings / rating.size();
- 
     vector < string> docus =
     {
         "I like cats",
@@ -120,7 +107,6 @@ void TestForUsingPredicate()
         "Where are you from",
         "Who it can be now",
     };
- 
     vector <vector<string>> documents =
     {
         {"I", "like", "cats"},
@@ -128,17 +114,12 @@ void TestForUsingPredicate()
         {"Where", "are", "you", "from"},
         {"Who", "it", "can", "be", "now"}
     };
- 
-    
     for (size_t i = 0; i < docus.size(); ++i) 
     {
        server.AddDocument(i, docus[i], status, rating);
     }
- 
     for (int i = 0; i < documents.size(); ++i) {
-        
         for (const auto& s : documents[i]) {
-            
             auto predicate = [i, status, avg_rating](int id, DocumentStatus st, int rating) {
                 return id == i && st == status && avg_rating == rating;
             };
@@ -150,13 +131,10 @@ void TestForUsingPredicate()
  
 void TestForAddDocument() {
     SearchServer server;
-    const int doc_id = { 10 };
-     string docus = "I like cats";
-    vector <int> rating = { 1,2,3,4 };
-    server.AddDocument(doc_id, docus, DocumentStatus::ACTUAL, rating);
-    ASSERT_EQUAL(server.GetDocumentCount(), 1);
-    vector <Document> v = server.FindTopDocuments("cats");
-    ASSERT(v.size() == 1);
+    server.AddDocument(0, "cat in the white box", DocumentStatus::ACTUAL, {1, 2, 3});
+    server.AddDocument(1, "cat in the black box", DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    server.AddDocument(2, "dog in the black box", DocumentStatus::ACTUAL, {-4, -12, -2});
+    ASSERT(server.GetDocumentCount() == 3);
  
 }
 void TestForMatchDoc() {
@@ -164,9 +142,6 @@ void TestForMatchDoc() {
     const int doc_id = { 10 };
     vector <int> rating = { 1,2,3,4 };
     DocumentStatus status = DocumentStatus::ACTUAL;
-    
-    
- 
     {
         SearchServer server;
         server.AddDocument(doc_id, "cat in black box", status, rating);
@@ -175,45 +150,28 @@ void TestForMatchDoc() {
         tie(v, status) = server.MatchDocument("cat", doc_id);
         ASSERT(!v.empty());
     }
- 
-   {
+    {
         SearchServer server;
-        
         server.AddDocument(doc_id, "-cat in black box", status, rating);
         ASSERT(server.GetDocumentCount() == 1);
         vector<string> v;
         tie(v, status) = server.MatchDocument("сat", doc_id);
         ASSERT(v.empty());
     }
-    
- 
 }
  
 void TestForRating() {
     SearchServer server;
-    const DocumentStatus status = DocumentStatus::ACTUAL;
-    const vector<int> rating = { 1,2,3,4 };
-        double sum_ratings = 0.0;
-    for (auto& n : rating) {
-        sum_ratings += n;
-    }
-    const int avg_rating = sum_ratings / rating.size();
-    server.AddDocument(0, "cat in the black box", status, rating);
-    ASSERT(server.GetDocumentCount() == 1);
- 
-    vector<Document> v = server.FindTopDocuments("cat");
- 
-    ASSERT_EQUAL(avg_rating, v[0].rating);
- 
+    server.AddDocument(0, "cat in the black box", DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    server.AddDocument(1, "dog in the black box", DocumentStatus::ACTUAL, {-4, -12, -2});
+    ASSERT((server.FindTopDocuments("cat")[0].rating == -1) &
+           ((server.FindTopDocuments("dog")[0].rating == -6)));
 }
- 
- 
- 
+
 void TestForExludeMinusWordsFromSearch() {
     SearchServer server;
     const string s = "cat in the black box";
     server.AddDocument(0, s, DocumentStatus::ACTUAL, { 1,2,3 });
- 
     string query = "cat";
     vector<Document> v = server.FindTopDocuments(query);
     ASSERT(v.size() == 1);
@@ -227,15 +185,13 @@ void TestForDocumentStatus() {
     const string s = "cat in the black box";
     DocumentStatus status = DocumentStatus::ACTUAL;
     server.AddDocument(0, s, status, { 1,2,3 });
- 
-    
     auto v = server.FindTopDocuments("cat", status);
     ASSERT(v.size() == 1);
-    
- 
+    ASSERT((server.FindTopDocuments("cat", DocumentStatus::IRRELEVANT).size() == 0) &
+        (server.FindTopDocuments("cat", DocumentStatus::BANNED).size() == 0) &
+        (server.FindTopDocuments("cat", DocumentStatus::REMOVED).size() == 0));
 }
  
-
 void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestForAddDocument);
