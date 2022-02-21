@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 #include <stdexcept>
+#include <numeric>
 
 using namespace std;
 
@@ -71,8 +72,8 @@ public:
     template <typename StringCollection>
     explicit SearchServer(const StringCollection& stop_words) 
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)){
-        if (!IsValidStopWords(stop_words)) {
-            throw invalid_argument("Стоп-слово содержит недопустимые символы"s);
+        if (IsNotValidStopWords(stop_words)) {
+            throw invalid_argument("Стоп-слово \""s + IsNotValidStopWords(stop_words).value() + "\" содержит недопустимые символы"s);
         }
     }
         
@@ -82,8 +83,11 @@ public:
     
     void AddDocument(int document_id, const string& document, DocumentStatus status,
                                    const vector<int>& ratings) {
-        if ((document_id < 0) || (documents_.count(document_id) > 0)) {
-            throw invalid_argument("недопустимый id"s);
+        if ((document_id < 0)) {
+            throw invalid_argument("Попытка добавить документ с отрицательным id"s);
+        }
+        if ((documents_.count(document_id) > 0)) {
+            throw invalid_argument("Попытка добавить документ c id ранее добавленного документа"s);
         }
         else if (!IsValidWord(document)){
             throw invalid_argument("недопустимый документ"s);
@@ -109,7 +113,8 @@ public:
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
-            if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+            double error_size = 1e-6;
+            if (abs(lhs.relevance - rhs.relevance) < error_size) {
                 return lhs.rating > rhs.rating;
             } else {
                 return lhs.relevance > rhs.relevance;
@@ -130,9 +135,9 @@ public:
             throw invalid_argument("недопустимый запрос"s);
         }
         else {
-        vector<Document> result = FindTopDocuments(raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
+            vector<Document> result = FindTopDocuments(raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
             return document_status == status;
-        });
+            });
         return result;
         }
     }
@@ -142,7 +147,7 @@ public:
             throw invalid_argument("недопустимый запрос"s);
         }
         else {
-        vector<Document> result = FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+            vector<Document> result = FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
         return result;
         }
     }
@@ -178,15 +183,15 @@ public:
         if (index <=0 || index>documents_.size()) {
             throw out_of_range("недопустимый индекс"s);
         }
-        int c;
-        int i=0;
-        for (auto [a,_]: documents_){
-            i++;
-            if (i==index){
-                c=a;
+        int GetId;
+        int count = 0;
+        for (auto [id,_]: documents_){
+            count++;
+            if (count == index){
+                GetId = id;
             }
         }
-        return c;
+        return GetId;
     }
     
 private:
@@ -206,20 +211,19 @@ private:
     }
     
     template <typename StringContainer>
-    static bool IsValidStopWords(const StringContainer& strings) {
-    bool param = true;
+    optional<string> IsNotValidStopWords(const StringContainer& strings) {
         for (const string& str : strings) {
             if(!IsValidWord(str)){
-                param = false;
+                return str;  
             }   
         }
-    return param;
+    return nullopt;    
     }
     
     static bool IsValidMinus(const string& word) {
         bool param = true;
-        for (int i=0; i<word.length(); i++) {
-            if (word[i]=='-' &&((word[i+1]=='-') || (i==word.length()-1))){
+        for (int i = 0; i < word.length(); i++) {
+            if (word[i] == '-' &&((word[i+1] == '-') || (i == word.length() - 1))){
                 param = false;
             }
         }
@@ -244,10 +248,7 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(), ratings.end(),0);
         return rating_sum / static_cast<int>(ratings.size());
     }
     struct QueryWord {
@@ -258,7 +259,6 @@ private:
 
     QueryWord ParseQueryWord(string text) const {
         bool is_minus = false;
-        // Word shouldn't be empty
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
@@ -377,7 +377,7 @@ void MatchDocuments(const SearchServer& search_server, const string& query) {
 }
 
 int main() {
-    SearchServer search_server("и в на"s);
+    SearchServer search_server("и в н\x12а"s);
 
     AddDocument(search_server, 1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
     AddDocument(search_server, 1, "пушистый пёс и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
